@@ -1,0 +1,42 @@
+name: Update local repository
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: update-local-repo-main
+  cancel-in-progress: true
+
+jobs:
+  sync-local-repo:
+    runs-on:
+      - self-hosted
+      - windows
+    env:
+      LOCAL_REPO_PATH: ${{ vars.LOCAL_REPO_PATH }}
+      TARGET_BRANCH: main
+    steps:
+      - name: Validate configuration
+        shell: powershell
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:LOCAL_REPO_PATH)) {
+            throw "Defina a variável de repositório LOCAL_REPO_PATH com o caminho absoluto do clone local."
+          }
+
+          if (-not (Test-Path -LiteralPath $env:LOCAL_REPO_PATH)) {
+            throw "LOCAL_REPO_PATH não existe: $env:LOCAL_REPO_PATH"
+          }
+
+          $gitDir = Join-Path $env:LOCAL_REPO_PATH ".git"
+          if (-not (Test-Path -LiteralPath $gitDir)) {
+            throw "O caminho informado não parece ser um repositório Git: $env:LOCAL_REPO_PATH"
+          }
+
+      - name: Update local clone
+        shell: powershell
+        run: |
+          git -C "$env:LOCAL_REPO_PATH" fetch origin "$env:TARGET_BRANCH"
+          git -C "$env:LOCAL_REPO_PATH" checkout "$env:TARGET_BRANCH"
+          git -C "$env:LOCAL_REPO_PATH" pull --ff-only origin "$env:TARGET_BRANCH"
