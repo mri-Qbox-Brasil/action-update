@@ -37,14 +37,14 @@ São erros que causavam crash imediato ou download inválido. Todos corrigidos; 
 - [x] **`src/utils/os.js`** — nome `actions-runner-<plat>-latest.<ext>` não existe (404). Agora resolve a versão real via `api.github.com/.../releases/latest` e monta o nome com ela.
 - [x] **`--backend` morto** — `apiClient.js` resolve `BACKEND_URL` em tempo de chamada e `install.js` propaga a opção para `process.env.BACKEND_URL`.
 
-## Fase 1 — Backend de autenticação 🟠
+## Fase 1 — Backend de autenticação ✅ (concluída)
 
-A CLI não funciona sem ele. Definir se entra neste repo ou em outro.
+Implementado em `backend/` (Express). Boot e endpoints validados via smoke test; o fluxo OAuth completo exige um GitHub OAuth App configurado.
 
-- [ ] Especificar o contrato dos 3 endpoints (`GET /auth/github`, `GET /session/:id`, `POST /runner/token`) — payloads e status (`READY`/`ERROR`).
-- [ ] Implementar o OAuth do GitHub e a emissão do **registration token** do runner (`POST /repos/{owner}/{repo}/actions/runners/registration-token`).
-- [ ] Gerenciar sessões (store com TTL — o polling da CLI tem timeout de 2 min).
-- [ ] Documentar como subir o backend (README + `.env.example`).
+- [x] Contrato dos endpoints definido (`/auth/github`, `/auth/github/callback`, `/session/:id`, `/runner/token`, `/health`) com status `PENDING`/`READY`/`ERROR`.
+- [x] OAuth do GitHub e emissão do **registration token** (`POST /repos/{owner}/{repo}/actions/runners/registration-token`).
+- [x] Store de sessões em memória com TTL (10 min).
+- [x] Documentação (seção 3 do README + `.env.example`).
 
 ## Fase 2 — Robustez da CLI 🟡
 

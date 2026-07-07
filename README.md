@@ -60,16 +60,16 @@ Em **Settings > Secrets and variables > Actions > Variables**:
 
 ---
 
-## 2. CLI `meu-runner` — ⚠️ em desenvolvimento
+## 2. CLI `meu-runner` — 🚧 em desenvolvimento
 
-> **Status:** incompleto. Depende de um backend de autenticação que ainda não está incluído no repositório e há partes não finalizadas. Documentado aqui para referência do trabalho em andamento.
+> **Status:** em desenvolvimento. A CLI executa e o backend de autenticação já existe (ver seção 3), mas o fluxo completo depende de um GitHub OAuth App configurado. Ainda faltam itens de robustez (ver `ROADMAP.md`).
 
 CLI para instalação automatizada de um GitHub Actions self-hosted runner.
 
 ### Pré-requisitos
 
 - Node.js >= 18
-- Backend rodando com os endpoints:
+- Backend rodando (ver seção 3), que expõe:
   - `GET /auth/github?sessionId=XYZ`
   - `GET /session/:sessionId`
   - `POST /runner/token`
@@ -119,3 +119,35 @@ meu-runner install owner/repo --name meu-runner --workdir _work --backend http:/
 - Windows (x64)
 - Linux (x64, arm64)
 - macOS (x64, arm64)
+
+---
+
+## 3. Backend de autenticação
+
+Serviço em `backend/` (Express) que a CLI consome para autenticar o usuário via OAuth do GitHub e emitir o **registration-token** do runner.
+
+### Endpoints
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/auth/github?sessionId=XYZ` | Registra a sessão e redireciona ao consentimento do GitHub. |
+| `GET` | `/auth/github/callback` | Troca o código OAuth pelo access token e marca a sessão como `READY`. |
+| `GET` | `/session/:sessionId` | Status da sessão (`PENDING` / `READY` / `ERROR`) — usado no polling da CLI. |
+| `POST` | `/runner/token` | Body `{ sessionId, repo }` → `{ token }` (registration-token do runner). |
+| `GET` | `/health` | Healthcheck. |
+
+### Configuração
+
+1. Crie um **GitHub OAuth App** em **Settings > Developer settings > OAuth Apps**.
+   - **Authorization callback URL**: `<BASE_URL>/auth/github/callback`
+2. Copie `backend/.env.example` para `backend/.env` e preencha `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.
+
+### Executar
+
+```bash
+cd backend
+npm install
+npm start
+```
+
+> A sessão expira em 10 min; o token OAuth do usuário fica apenas em memória e não é persistido.
