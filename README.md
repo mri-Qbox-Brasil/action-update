@@ -37,9 +37,17 @@ Em **Settings > Secrets and variables > Actions > Variables**:
 
 | Variável | Obrigatória | Padrão | Descrição |
 |---|---|---|---|
-| `LOCAL_REPO_PATH` | ✅ | — | Caminho absoluto do clone local (ex.: `D:\repos\meu-projeto`). Precisa existir, conter `.git` e ter permissão de leitura/escrita para o usuário/serviço do runner. |
+| `LOCAL_REPO_PATH` | ✅ | — | Caminho absoluto do clone local (ex.: `D:\repos\meu-projeto`). Com `BOOTSTRAP_CLONE=false`, precisa já ser um clone Git com permissão de leitura/escrita para o usuário/serviço do runner. |
 | `SOURCE_BRANCH` | ❌ | `main` | Branch cujo `push` dispara a atualização. |
 | `TARGET_BRANCH` | ❌ | `main` | Branch que será atualizada no clone local. |
+| `BOOTSTRAP_CLONE` | ❌ | `false` | Se `true`, clona o repositório em `LOCAL_REPO_PATH` quando ainda não houver um clone. |
+| `RESET_ON_CONFLICT` | ❌ | `false` | Se `true`, descarta alterações/commits locais (`reset --hard` + `clean`) em vez de falhar no `pull --ff-only`. |
+
+Secret opcional:
+
+| Secret | Descrição |
+|---|---|
+| `NOTIFY_WEBHOOK` | Webhook (ex.: Discord) chamado quando a atualização falha. Se ausente, a notificação é pulada. |
 
 > O `GITHUB_TOKEN` usado na autenticação é o token automático do workflow — não precisa configurar secret manualmente.
 

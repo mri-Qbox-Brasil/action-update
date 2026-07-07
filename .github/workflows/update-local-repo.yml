@@ -24,7 +24,12 @@ jobs:
       LOCAL_REPO_PATH: ${{ vars.LOCAL_REPO_PATH }}
       SOURCE_BRANCH: ${{ vars.SOURCE_BRANCH || 'main' }}
       TARGET_BRANCH: ${{ vars.TARGET_BRANCH || 'main' }}
-      # Token do proprio workflow, usado para autenticar o fetch/pull do repo privado.
+      GH_REPOSITORY: ${{ github.repository }}
+      # Clona o repo automaticamente se LOCAL_REPO_PATH ainda nao for um clone (vars, default false).
+      BOOTSTRAP_CLONE: ${{ vars.BOOTSTRAP_CLONE || 'false' }}
+      # Descarta alteracoes locais em vez de falhar no pull --ff-only (vars, default false).
+      RESET_ON_CONFLICT: ${{ vars.RESET_ON_CONFLICT || 'false' }}
+      # Token do proprio workflow, usado para autenticar o clone/fetch/pull do repo privado.
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Faz o git FALHAR rapido em vez de travar esperando login interativo.
       GIT_TERMINAL_PROMPT: "0"
@@ -37,31 +42,74 @@ jobs:
             throw "Defina a variável de repositório LOCAL_REPO_PATH com o caminho absoluto do clone local."
           }
 
-          if (-not (Test-Path -LiteralPath $env:LOCAL_REPO_PATH)) {
-            throw "LOCAL_REPO_PATH não existe: $env:LOCAL_REPO_PATH"
-          }
-
-          $gitDir = Join-Path $env:LOCAL_REPO_PATH ".git"
-          if (-not (Test-Path -LiteralPath $gitDir)) {
-            throw "O caminho informado não parece ser um repositório Git: $env:LOCAL_REPO_PATH"
-          }
-
       - name: Update local clone
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+
+          # Autentica clone/fetch/pull do repo privado usando o GITHUB_TOKEN via header,
+          # sem gravar o token no .git/config do clone local.
+          $basic = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("x-access-token:$($env:GH_TOKEN)"))
+          $authHeader = "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic"
+
+          $repo = $env:LOCAL_REPO_PATH -replace '\\', '/'
+          $gitDir = Join-Path $env:LOCAL_REPO_PATH ".git"
+          $isClone = (Test-Path -LiteralPath $env:LOCAL_REPO_PATH) -and (Test-Path -LiteralPath $gitDir)
+
+          # Bootstrap: se ainda nao existe um clone, clona (quando BOOTSTRAP_CLONE=true).
+          if (-not $isClone) {
+            if ($env:BOOTSTRAP_CLONE -eq 'true') {
+              Write-Host "Clonando $env:GH_REPOSITORY em $env:LOCAL_REPO_PATH ..."
+              $cloneUrl = "https://github.com/$($env:GH_REPOSITORY).git"
+              git -c "$authHeader" clone --branch "$env:TARGET_BRANCH" "$cloneUrl" "$env:LOCAL_REPO_PATH"
+              if ($LASTEXITCODE -ne 0) { throw "Falha ao clonar o repositório." }
+            } else {
+              throw "LOCAL_REPO_PATH não é um clone Git: $env:LOCAL_REPO_PATH. Defina BOOTSTRAP_CLONE=true para clonar automaticamente."
+            }
+          }
+
           # O runner roda como NETWORK SERVICE, mas a pasta pertence ao Administrators.
           # Marca o diretorio como confiavel (idempotente) para evitar "dubious ownership".
-          $repo = $env:LOCAL_REPO_PATH -replace '\\', '/'
           $safe = git config --global --get-all safe.directory
           if ($safe -notcontains $repo) {
             git config --global --add safe.directory "$repo"
           }
 
-          # Autentica o fetch/pull do repo privado usando o GITHUB_TOKEN via header,
-          # sem gravar o token no .git/config do clone local.
-          $basic = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("x-access-token:$($env:GH_TOKEN)"))
-          $authHeader = "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic"
-
           git -C "$env:LOCAL_REPO_PATH" -c "$authHeader" fetch origin "$env:TARGET_BRANCH"
+          if ($LASTEXITCODE -ne 0) { throw "Falha no fetch de origin/$env:TARGET_BRANCH." }
+
           git -C "$env:LOCAL_REPO_PATH" checkout "$env:TARGET_BRANCH"
-          git -C "$env:LOCAL_REPO_PATH" -c "$authHeader" pull --ff-only origin "$env:TARGET_BRANCH"
+          if ($LASTEXITCODE -ne 0) { throw "Falha no checkout de $env:TARGET_BRANCH." }
+
+          if ($env:RESET_ON_CONFLICT -eq 'true') {
+            # Descarta commits/alteracoes locais e alinha exatamente com o remoto.
+            Write-Host "RESET_ON_CONFLICT=true: descartando alterações locais."
+            git -C "$env:LOCAL_REPO_PATH" reset --hard "origin/$env:TARGET_BRANCH"
+            if ($LASTEXITCODE -ne 0) { throw "Falha no reset --hard." }
+            git -C "$env:LOCAL_REPO_PATH" clean -fd
+          } else {
+            git -C "$env:LOCAL_REPO_PATH" -c "$authHeader" pull --ff-only origin "$env:TARGET_BRANCH"
+            if ($LASTEXITCODE -ne 0) {
+              throw "pull --ff-only falhou: o clone local tem commits/alterações divergentes. Resolva manualmente ou defina RESET_ON_CONFLICT=true."
+            }
+          }
+
+          Write-Host "Clone local atualizado para origin/$env:TARGET_BRANCH."
+
+      - name: Notify on failure
+        if: ${{ failure() }}
+        shell: powershell
+        continue-on-error: true
+        env:
+          # Opcional. Webhook (ex.: Discord) para avisar quando a atualizacao falhar.
+          NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:NOTIFY_WEBHOOK)) {
+            Write-Host "NOTIFY_WEBHOOK não configurado; pulando notificação."
+            exit 0
+          }
+          $body = @{
+            content = "❌ Falha ao atualizar o clone local ($env:GH_REPOSITORY @ $env:TARGET_BRANCH). Detalhes: $env:RUN_URL"
+          } | ConvertTo-Json
+          Invoke-RestMethod -Uri $env:NOTIFY_WEBHOOK -Method Post -ContentType 'application/json' -Body $body

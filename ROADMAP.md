@@ -58,12 +58,15 @@ Correções verificadas via smoke test (help, dotenv, erro offline, rota do back
 - [x] Quoting correto dos argumentos do `config.cmd` (espaços em nome/workdir) e imports não usados removidos.
 - [ ] **Residual:** o `--token` ainda é passado como argumento do `config.cmd` (interface do runner não aceita env/stdin para o token). Mitigado por ser um token de curta duração e nunca ser logado.
 
-## Fase 3 — Robustez do Workflow 🟡
+## Fase 3 — Robustez do Workflow 🟢 (majoritariamente concluída)
 
-- [ ] **Bootstrap:** hoje o workflow assume um clone já existente. Tratar o caso do `LOCAL_REPO_PATH` ainda não clonado (fazer `clone` inicial).
-- [ ] **Working tree divergente/suja:** `pull --ff-only` falha se o clone local tiver commits/alterações locais. Definir estratégia (abortar com mensagem clara, ou `reset --hard`/`clean` opcional via variável).
-- [ ] **Notificação em falha** (Slack/Discord/e-mail) — hoje uma falha só aparece na aba Actions.
-- [ ] Suporte opcional a runner **Linux/macOS** (a CLI já detecta os 3 SOs; o workflow é Windows-only).
+YAML validado (parse OK). O comportamento em runtime depende do runner self-hosted real.
+
+- [x] **Bootstrap:** clona automaticamente quando `LOCAL_REPO_PATH` ainda não é um clone (variável `BOOTSTRAP_CLONE=true`).
+- [x] **Working tree divergente/suja:** `RESET_ON_CONFLICT=true` faz `reset --hard` + `clean`; caso contrário, `pull --ff-only` falha com mensagem clara.
+- [x] **Notificação em falha:** step `if: failure()` que chama `NOTIFY_WEBHOOK` (ex.: Discord) quando configurado; pulado se ausente.
+- [x] Checagem de erro explícita (`$LASTEXITCODE`) em cada passo do git.
+- [ ] **Adiado:** suporte a runner **Linux/macOS**. O runner-alvo é Windows; um variante bash não testado traria risco sem benefício imediato. Manter Windows-only por ora.
 
 ## Fase 4 — Qualidade e entrega 🟢
 
