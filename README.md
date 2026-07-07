@@ -3,33 +3,34 @@
 Este repositório contém dois componentes:
 
 1. **Workflow do GitHub Actions** que **atualiza um clone local** automaticamente quando há `push` na branch de origem. *(funcional)*
-2. **CLI `meu-runner`** para instalar/configurar um GitHub Actions self-hosted runner. *(⚠️ em desenvolvimento / incompleto)*
+2. **CLI `meu-runner`** para instalar/configurar um GitHub Actions self-hosted runner. *(🚧 em desenvolvimento)*
 
 ---
 
 ## 1. Workflow — Update local repository
 
-O workflow está em `.github/workflows/update-local-repo.yml`. Ele roda num **runner self-hosted Windows** e, a cada push na branch de origem, faz `fetch` + `checkout` + `pull --ff-only` no clone local apontado por `LOCAL_REPO_PATH`.
+O workflow está em `.github/workflows/update-local-repo.yml`. Ele roda num **runner self-hosted Windows** e, a cada push na branch de origem, sincroniza o clone local apontado por `LOCAL_REPO_PATH` com a branch de destino.
 
 ### Como funciona
 
 1. Dispara em `push` em **qualquer branch**, mas o job só executa quando o push é na branch definida em `SOURCE_BRANCH` (fallback `main`). O filtro é feito no `if:` do job porque `on.push.branches` não aceita variáveis.
 2. Roda num runner self-hosted com labels `self-hosted` e `windows`.
 3. Tem `timeout-minutes: 5` para não ficar pendurado caso o git abra um prompt de credencial.
-4. Valida a variável `LOCAL_REPO_PATH` (existe? tem `.git`?).
-5. Marca o diretório como confiável (`git config --global --add safe.directory`, idempotente) para evitar o erro *"dubious ownership"* — o runner roda como `NETWORK SERVICE`, mas a pasta pertence a `Administrators`.
-6. Autentica o `fetch`/`pull` do **repositório privado** usando o `GITHUB_TOKEN` do próprio workflow, injetado via header (`http.extraheader`) — o token **não** é gravado no `.git/config` do clone local.
-7. Executa contra a branch de destino (`TARGET_BRANCH`, fallback `main`):
-   - `git fetch origin <TARGET_BRANCH>`
-   - `git checkout <TARGET_BRANCH>`
-   - `git pull --ff-only origin <TARGET_BRANCH>`
+4. Valida que a variável `LOCAL_REPO_PATH` está definida.
+5. Se o caminho ainda **não for um clone Git**: clona automaticamente quando `BOOTSTRAP_CLONE=true`, senão falha com mensagem clara.
+6. Marca o diretório como confiável (`git config --global --add safe.directory`, idempotente) para evitar o erro *"dubious ownership"* — o runner roda como `NETWORK SERVICE`, mas a pasta pertence a `Administrators`.
+7. Autentica o `clone`/`fetch`/`pull` do **repositório privado** usando o `GITHUB_TOKEN` do próprio workflow, injetado via header (`http.extraheader`) — o token **não** é gravado no `.git/config` do clone local.
+8. Atualiza contra a branch de destino (`TARGET_BRANCH`, fallback `main`): `fetch` + `checkout` e então:
+   - com `RESET_ON_CONFLICT=true`: `git reset --hard origin/<TARGET_BRANCH>` + `git clean -fd` (descarta alterações locais);
+   - caso contrário: `git pull --ff-only` (falha se o clone local divergiu).
+9. Em caso de falha, um step `if: failure()` chama o webhook `NOTIFY_WEBHOOK`, se configurado.
 
 ### Pré-requisitos
 
 - Repositório no GitHub com Actions habilitado.
 - Máquina Windows para rodar como agente local (runner self-hosted).
 - Git instalado na máquina do runner.
-- Um clone local do repositório que será atualizado.
+- Um clone local do repositório — ou `BOOTSTRAP_CLONE=true` para que o próprio workflow clone na primeira execução.
 
 ### Configuração (variáveis do repositório)
 
@@ -77,10 +78,7 @@ CLI para instalação automatizada de um GitHub Actions self-hosted runner.
 ### Pré-requisitos
 
 - Node.js >= 18
-- Backend rodando (ver seção 3), que expõe:
-  - `GET /auth/github?sessionId=XYZ`
-  - `GET /session/:sessionId`
-  - `POST /runner/token`
+- Backend rodando (ver seção 3), que expõe os endpoints de autenticação e emissão de token (`/auth/github`, `/session/:id`, `/runner/token`, `/runner/remove-token`).
 
 ### Instalação
 
@@ -128,10 +126,12 @@ Remove o runner do GitHub (usando um remove-token emitido pelo backend) e apaga 
 2. Abre o navegador para autenticação OAuth no GitHub.
 3. Faz polling da sessão até a autorização (timeout de 2 min).
 4. Obtém o token do runner via backend.
-5. Baixa o runner oficial do GitHub.
+5. Baixa o runner oficial do GitHub (resolvendo a versão mais recente).
 6. Extrai os arquivos.
-7. Configura o runner automaticamente.
-8. Inicia o runner.
+7. Configura o runner de forma não interativa.
+8. Inicia em primeiro plano ou, com `--service`, instala como serviço (`--runasservice` no Windows; `svc.sh` no Linux/macOS).
+
+O `uninstall` reutiliza os passos 1–4 (auth + remove-token) e então remove o runner do GitHub e apaga a pasta local.
 
 ### Sistemas suportados
 
