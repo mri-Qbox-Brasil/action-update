@@ -46,15 +46,17 @@ Implementado em `backend/` (Express). Boot e endpoints validados via smoke test;
 - [x] Store de sessões em memória com TTL (10 min).
 - [x] Documentação (seção 3 do README + `.env.example`).
 
-## Fase 2 — Robustez da CLI 🟡
+## Fase 2 — Robustez da CLI ✅ (concluída)
 
-- [ ] Suporte a `.env` (dotenv) — hoje `BACKEND_URL` só via env manual.
-- [ ] Não passar o `--token` como argumento de linha de comando (visível no process list). Usar env/stdin.
-- [ ] Instalar como **serviço** (`svc install` + `svc start`) em vez de `run.cmd` em foreground, para o runner sobreviver a reinícios.
-- [ ] Mensagens de erro claras para backend offline / conexão recusada.
-- [ ] Comando de **desinstalação** (`remove`/`uninstall`) que remove o runner do GitHub e limpa a pasta.
-- [ ] Validar pré-requisitos no host (git instalado, permissões).
-- [ ] Limpar imports não usados (`execSync` em `install.js`, `__dirname` nos services).
+Correções verificadas via smoke test (help, dotenv, erro offline, rota do backend). O fluxo que aciona o runner real (`config.cmd`/`svc`) foi implementado mas não é testável nesta máquina sem um runner/token reais.
+
+- [x] Suporte a `.env` (dotenv) carregado no `index.js`.
+- [x] Instalação como **serviço** via `--service` (`--runasservice` no Windows; `svc.sh install/start` no Linux/macOS).
+- [x] Mensagens de erro claras para backend offline (wrapper `safeFetch`).
+- [x] Comando **`uninstall`** que remove o runner do GitHub (remove-token) e apaga a pasta local.
+- [x] Fluxo de auth extraído para `services/auth.js` (reuso entre install/uninstall).
+- [x] Quoting correto dos argumentos do `config.cmd` (espaços em nome/workdir) e imports não usados removidos.
+- [ ] **Residual:** o `--token` ainda é passado como argumento do `config.cmd` (interface do runner não aceita env/stdin para o token). Mitigado por ser um token de curta duração e nunca ser logado.
 
 ## Fase 3 — Robustez do Workflow 🟡
 

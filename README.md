@@ -96,12 +96,23 @@ meu-runner install owner/repo
 #### Opções
 
 ```bash
-meu-runner install owner/repo --name meu-runner --workdir _work --backend http://localhost:3000
+meu-runner install owner/repo --name meu-runner --workdir _work --service --backend http://localhost:3000
 ```
 
 - `--name`: Nome do runner (padrão: `runner-{timestamp}`)
 - `--workdir`: Diretório de trabalho (padrão: `_work`)
-- `--backend`: URL do backend (padrão: `http://localhost:3000`)
+- `--service`: Instala como serviço em vez de rodar em primeiro plano
+- `--backend`: URL do backend (padrão: env `BACKEND_URL` ou `http://localhost:3000`)
+
+> A `BACKEND_URL` também pode vir de um arquivo `.env` (via dotenv). O `--backend` tem precedência.
+
+#### Remover o runner
+
+```bash
+meu-runner uninstall owner/repo
+```
+
+Remove o runner do GitHub (usando um remove-token emitido pelo backend) e apaga a pasta local `runner-*`.
 
 ### Fluxo
 

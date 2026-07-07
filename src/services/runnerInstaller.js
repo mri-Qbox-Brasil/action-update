@@ -1,54 +1,72 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { spawnSync } from 'child_process';
 import { detectOS } from '../utils/os.js';
-import { log, success, error } from '../utils/logger.js';
+import { log, success } from '../utils/logger.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+function quote(value) {
+  // Aspas para preservar espaços; remove aspas embutidas para não quebrar o comando.
+  return `"${String(value).replace(/"/g, '')}"`;
+}
 
-export async function configureRunner(runnerDir, repo, token, name, workDir) {
+function run(command, cwd) {
+  const result = spawnSync(command, { cwd, stdio: 'inherit', shell: true });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Comando falhou (código ${result.status}): ${command.split(' ')[0]}`);
+  }
+}
+
+export function configureRunner(runnerDir, repo, token, name, workDir, asService) {
   const osInfo = detectOS();
   log('Configurando runner...');
 
   const url = `https://github.com/${repo}`;
-  const configScript = osInfo.isWindows ? 'config.cmd' : './config.sh';
-  const configPath = path.join(runnerDir, configScript);
+  const script = osInfo.isWindows ? 'config.cmd' : './config.sh';
 
-  const args = [
-    `--url ${url}`,
-    `--token ${token}`,
+  const parts = [
+    script,
+    '--url', quote(url),
+    '--token', quote(token),
     '--unattended',
-    `--name ${name}`,
-    `--work ${workDir}`
-  ].join(' ');
+    '--replace',
+    '--name', quote(name),
+    '--work', quote(workDir)
+  ];
 
-  const cmd = osInfo.isWindows ? `${configPath} ${args}` : `${configPath} ${args}`;
-  
-  const { execSync } = await import('child_process');
-  try {
-    execSync(cmd, { cwd: runnerDir, stdio: 'inherit' });
-    success('Runner configurado com sucesso');
-  } catch (err) {
-    error(`Falha na configuração: ${err.message}`);
-    throw err;
+  // No Windows o próprio config instala e inicia o serviço.
+  if (asService && osInfo.isWindows) {
+    parts.push('--runasservice');
   }
+
+  run(parts.join(' '), runnerDir);
+  success('Runner configurado com sucesso');
 }
 
-export async function startRunner(runnerDir) {
+// Instala/inicia como serviço no Linux/macOS (no Windows já foi via --runasservice).
+export function installService(runnerDir) {
+  const osInfo = detectOS();
+  if (osInfo.isWindows) {
+    success('Runner instalado como serviço');
+    return;
+  }
+  log('Instalando serviço...');
+  run('sudo ./svc.sh install', runnerDir);
+  run('sudo ./svc.sh start', runnerDir);
+  success('Serviço instalado e iniciado');
+}
+
+// Execução em primeiro plano (quando --service não é usado). Bloqueia até o runner parar.
+export function startRunner(runnerDir) {
   const osInfo = detectOS();
   log('Iniciando runner...');
+  const script = osInfo.isWindows ? 'run.cmd' : './run.sh';
+  run(script, runnerDir);
+  success('Runner encerrado');
+}
 
-  const runScript = osInfo.isWindows ? 'run.cmd' : './run.sh';
-  const runPath = path.join(runnerDir, runScript);
-
-  const cmd = osInfo.isWindows ? runPath : runPath;
-
-  const { spawn } = await import('child_process');
-  const child = spawn(cmd, { cwd: runnerDir, stdio: 'inherit', shell: true });
-
-  child.on('close', (code) => {
-    if (code !== 0) error(`Runner encerrado com código: ${code}`);
-    else success('Runner encerrado');
-  });
-
-  return child;
+export function removeRunner(runnerDir, token) {
+  log('Removendo runner...');
+  const osInfo = detectOS();
+  const script = osInfo.isWindows ? 'config.cmd' : './config.sh';
+  run([script, 'remove', '--token', quote(token)].join(' '), runnerDir);
+  success('Runner removido');
 }

@@ -23,9 +23,10 @@ export async function exchangeCodeForToken(code) {
   return data.access_token;
 }
 
-export async function createRegistrationToken(userToken, repo) {
+async function createRunnerToken(userToken, repo, kind) {
+  // kind: 'registration-token' (registrar) ou 'remove-token' (remover).
   const response = await fetch(
-    `https://api.github.com/repos/${repo}/actions/runners/registration-token`,
+    `https://api.github.com/repos/${repo}/actions/runners/${kind}`,
     {
       method: 'POST',
       headers: {
@@ -39,9 +40,17 @@ export async function createRegistrationToken(userToken, repo) {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Falha ao emitir registration-token: ${response.status} ${body}`);
+    throw new Error(`Falha ao emitir ${kind}: ${response.status} ${body}`);
   }
 
   const data = await response.json();
   return data.token;
+}
+
+export function createRegistrationToken(userToken, repo) {
+  return createRunnerToken(userToken, repo, 'registration-token');
+}
+
+export function createRemovalToken(userToken, repo) {
+  return createRunnerToken(userToken, repo, 'remove-token');
 }

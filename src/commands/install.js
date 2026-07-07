@@ -1,14 +1,11 @@
-import crypto from 'crypto';
 import path from 'path';
-import open from 'open';
 import { detectOS } from '../utils/os.js';
-import { log, success, error, info, warn } from '../utils/logger.js';
-import { fetchSession, getRunnerToken, getAuthUrl } from '../services/apiClient.js';
+import { validateRepo } from '../utils/repo.js';
+import { log, success, error, info } from '../utils/logger.js';
+import { getRunnerToken } from '../services/apiClient.js';
+import { authorize } from '../services/auth.js';
 import { downloadRunner, extractRunner } from '../services/runnerDownloader.js';
-import { configureRunner, startRunner } from '../services/runnerInstaller.js';
-
-const POLL_INTERVAL = 2000;
-const POLL_TIMEOUT = 120000;
+import { configureRunner, startRunner, installService } from '../services/runnerInstaller.js';
 
 export async function installCommand(repo, options) {
   try {
@@ -19,21 +16,11 @@ export async function installCommand(repo, options) {
       process.env.BACKEND_URL = options.backend;
     }
 
-    const sessionId = crypto.randomUUID();
-    info(`Session ID: ${sessionId}`);
     info(`Repo: ${repo}`);
     info(`Runner name: ${options.name}`);
     info(`Work dir: ${options.workdir}`);
 
-    const authUrl = getAuthUrl(sessionId);
-    log('Abrindo navegador para autenticação...');
-    info(`URL: ${authUrl}`);
-    
-    await open(authUrl);
-    log('Aguardando autorização no navegador...');
-
-    const session = await pollSession(sessionId);
-    success('Autorização concluída!');
+    const sessionId = await authorize();
 
     log('Obtendo token do runner...');
     const { token } = await getRunnerToken(sessionId, repo);
@@ -41,54 +28,20 @@ export async function installCommand(repo, options) {
 
     const osInfo = detectOS();
     const runnerDir = path.resolve(`./runner-${osInfo.runnerPlatform}`);
-    
+
     const { filePath } = await downloadRunner(runnerDir);
     await extractRunner(filePath, osInfo, runnerDir);
 
-    await configureRunner(runnerDir, repo, token, options.name, options.workdir);
+    configureRunner(runnerDir, repo, token, options.name, options.workdir, options.service);
 
-    log('Iniciando runner...');
-    await startRunner(runnerDir);
-
+    if (options.service) {
+      installService(runnerDir);
+      success('Runner instalado como serviço.');
+    } else {
+      startRunner(runnerDir);
+    }
   } catch (err) {
     error(err.message);
     process.exit(1);
   }
-}
-
-function validateRepo(repo) {
-  if (!/^[^/]+\/[^/]+$/.test(repo)) {
-    throw new Error('Formato inválido. Use: owner/repo');
-  }
-}
-
-async function pollSession(sessionId) {
-  const start = Date.now();
-
-  while (Date.now() - start < POLL_TIMEOUT) {
-    try {
-      const session = await fetchSession(sessionId);
-      
-      if (session.status === 'READY') {
-        return session;
-      }
-      
-      if (session.status === 'ERROR') {
-        throw new Error('Erro na autenticação');
-      }
-
-      process.stdout.write('.');
-      await sleep(POLL_INTERVAL);
-    } catch (err) {
-      if (err.message.includes('Erro na autenticação')) throw err;
-      warn(`Erro no polling: ${err.message}`);
-      await sleep(POLL_INTERVAL);
-    }
-  }
-
-  throw new Error('Timeout: autorização não concluída em 2 minutos');
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }

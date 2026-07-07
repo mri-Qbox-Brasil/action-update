@@ -6,7 +6,11 @@ import {
   setSessionReady,
   setSessionError
 } from './sessions.js';
-import { exchangeCodeForToken, createRegistrationToken } from './github.js';
+import {
+  exchangeCodeForToken,
+  createRegistrationToken,
+  createRemovalToken
+} from './github.js';
 
 const app = express();
 app.use(express.json());
@@ -55,8 +59,8 @@ app.get('/session/:sessionId', (req, res) => {
   res.json({ status: session.status });
 });
 
-// Emite o registration-token para a CLI registrar o runner.
-app.post('/runner/token', async (req, res) => {
+// Emite um token de runner (registro ou remoção) para a CLI.
+async function issueRunnerToken(req, res, issue) {
   const { sessionId, repo } = req.body || {};
   try {
     const session = getSession(sessionId);
@@ -66,12 +70,15 @@ app.post('/runner/token', async (req, res) => {
     if (!REPO_RE.test(repo || '')) {
       return res.status(400).json({ error: 'repo inválido (use owner/repo)' });
     }
-    const token = await createRegistrationToken(session.token, repo);
+    const token = await issue(session.token, repo);
     res.json({ token });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}
+
+app.post('/runner/token', (req, res) => issueRunnerToken(req, res, createRegistrationToken));
+app.post('/runner/remove-token', (req, res) => issueRunnerToken(req, res, createRemovalToken));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
