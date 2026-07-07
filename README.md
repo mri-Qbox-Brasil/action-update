@@ -1,74 +1,121 @@
 # action-update
 
-Este projeto contém um workflow do GitHub Actions para **atualizar um clone local** automaticamente quando houver `push` na branch `main`.
+Este repositório contém dois componentes:
 
-## Como funciona
+1. **Workflow do GitHub Actions** que **atualiza um clone local** automaticamente quando há `push` na branch de origem. *(funcional)*
+2. **CLI `meu-runner`** para instalar/configurar um GitHub Actions self-hosted runner. *(⚠️ em desenvolvimento / incompleto)*
 
-O workflow está em `.github/workflows/update-local-repo.yml` e:
+---
 
-1. Dispara em `push` na `main`.
-2. Roda em um runner self-hosted com labels `self-hosted` e `windows`.
-3. Valida a variável `LOCAL_REPO_PATH`.
-4. Executa:
-   - `git fetch origin main`
-   - `git checkout main`
-   - `git pull --ff-only origin main`
+## 1. Workflow — Update local repository
 
-## Pré-requisitos
+O workflow está em `.github/workflows/update-local-repo.yml`. Ele roda num **runner self-hosted Windows** e, a cada push na branch de origem, faz `fetch` + `checkout` + `pull --ff-only` no clone local apontado por `LOCAL_REPO_PATH`.
+
+### Como funciona
+
+1. Dispara em `push` em **qualquer branch**, mas o job só executa quando o push é na branch definida em `SOURCE_BRANCH` (fallback `main`). O filtro é feito no `if:` do job porque `on.push.branches` não aceita variáveis.
+2. Roda num runner self-hosted com labels `self-hosted` e `windows`.
+3. Tem `timeout-minutes: 5` para não ficar pendurado caso o git abra um prompt de credencial.
+4. Valida a variável `LOCAL_REPO_PATH` (existe? tem `.git`?).
+5. Marca o diretório como confiável (`git config --global --add safe.directory`, idempotente) para evitar o erro *"dubious ownership"* — o runner roda como `NETWORK SERVICE`, mas a pasta pertence a `Administrators`.
+6. Autentica o `fetch`/`pull` do **repositório privado** usando o `GITHUB_TOKEN` do próprio workflow, injetado via header (`http.extraheader`) — o token **não** é gravado no `.git/config` do clone local.
+7. Executa contra a branch de destino (`TARGET_BRANCH`, fallback `main`):
+   - `git fetch origin <TARGET_BRANCH>`
+   - `git checkout <TARGET_BRANCH>`
+   - `git pull --ff-only origin <TARGET_BRANCH>`
+
+### Pré-requisitos
 
 - Repositório no GitHub com Actions habilitado.
 - Máquina Windows para rodar como agente local (runner self-hosted).
 - Git instalado na máquina do runner.
 - Um clone local do repositório que será atualizado.
 
-## Configurar o agente local (runner self-hosted)
+### Configuração (variáveis do repositório)
 
-### 1) Criar o runner no GitHub
+Em **Settings > Secrets and variables > Actions > Variables**:
 
-No repositório:
+| Variável | Obrigatória | Padrão | Descrição |
+|---|---|---|---|
+| `LOCAL_REPO_PATH` | ✅ | — | Caminho absoluto do clone local (ex.: `D:\repos\meu-projeto`). Precisa existir, conter `.git` e ter permissão de leitura/escrita para o usuário/serviço do runner. |
+| `SOURCE_BRANCH` | ❌ | `main` | Branch cujo `push` dispara a atualização. |
+| `TARGET_BRANCH` | ❌ | `main` | Branch que será atualizada no clone local. |
 
-1. Abra **Settings**.
-2. Vá em **Actions > Runners**.
-3. Clique em **New self-hosted runner**.
-4. Selecione **Windows** e siga os comandos mostrados pelo GitHub na máquina local.
+> O `GITHUB_TOKEN` usado na autenticação é o token automático do workflow — não precisa configurar secret manualmente.
 
-### 2) Registrar e iniciar o runner na máquina Windows
+### Configurar o agente local (runner self-hosted)
 
-No diretório onde você baixou o runner, execute os comandos fornecidos pelo GitHub, normalmente nesta ordem:
+1. No repositório: **Settings > Actions > Runners > New self-hosted runner**.
+2. Selecione **Windows** e rode os comandos mostrados pelo GitHub na máquina local:
+   - `config.cmd` (registro do runner)
+   - `run.cmd` (execução manual) **ou** `svc install` + `svc start` (rodar como serviço — recomendado, mantém o agente disponível após reinício).
+3. Confirme que o runner tem as labels `self-hosted` e `windows`.
 
-1. `config.cmd` (registro do runner)
-2. `run.cmd` (execução manual)  
-   ou `svc install` + `svc start` (rodar como serviço)
+### Teste de execução
 
-Recomendado: rodar como serviço para manter o agente sempre disponível após reinício.
-
-### 3) Garantir labels compatíveis
-
-Este workflow exige:
-
-- `self-hosted`
-- `windows`
-
-Confirme nas configurações do runner que essas labels existem.
-
-### 4) Configurar a variável LOCAL_REPO_PATH
-
-No repositório:
-
-1. Acesse **Settings > Secrets and variables > Actions**.
-2. Em **Variables**, crie:
-   - **Name**: `LOCAL_REPO_PATH`
-   - **Value**: caminho absoluto do clone local (ex.: `D:\repos\meu-projeto`)
-
-Esse caminho precisa:
-
-- existir na máquina do runner;
-- conter uma pasta `.git`;
-- ter permissão de leitura e escrita para o usuário/serviço que executa o runner.
-
-## Teste de execução
-
-1. Faça um commit e `push` na `main`.
+1. Faça um commit e `push` na branch de origem (`SOURCE_BRANCH`).
 2. Abra a aba **Actions** no GitHub.
 3. Verifique a execução do workflow **Update local repository**.
 4. Confirme no agente local se o repositório foi atualizado.
+
+---
+
+## 2. CLI `meu-runner` — ⚠️ em desenvolvimento
+
+> **Status:** incompleto. Depende de um backend de autenticação que ainda não está incluído no repositório e há partes não finalizadas. Documentado aqui para referência do trabalho em andamento.
+
+CLI para instalação automatizada de um GitHub Actions self-hosted runner.
+
+### Pré-requisitos
+
+- Node.js >= 18
+- Backend rodando com os endpoints:
+  - `GET /auth/github?sessionId=XYZ`
+  - `GET /session/:sessionId`
+  - `POST /runner/token`
+
+### Instalação
+
+```bash
+npm install
+```
+
+### Uso
+
+```bash
+node src/index.js install owner/repo
+```
+
+Ou configure como executável:
+
+```bash
+npm link
+meu-runner install owner/repo
+```
+
+#### Opções
+
+```bash
+meu-runner install owner/repo --name meu-runner --workdir _work --backend http://localhost:3000
+```
+
+- `--name`: Nome do runner (padrão: `runner-{timestamp}`)
+- `--workdir`: Diretório de trabalho (padrão: `_work`)
+- `--backend`: URL do backend (padrão: `http://localhost:3000`)
+
+### Fluxo
+
+1. Gera um `sessionId` (UUID).
+2. Abre o navegador para autenticação OAuth no GitHub.
+3. Faz polling da sessão até a autorização (timeout de 2 min).
+4. Obtém o token do runner via backend.
+5. Baixa o runner oficial do GitHub.
+6. Extrai os arquivos.
+7. Configura o runner automaticamente.
+8. Inicia o runner.
+
+### Sistemas suportados
+
+- Windows (x64)
+- Linux (x64, arm64)
+- macOS (x64, arm64)
