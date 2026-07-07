@@ -153,6 +153,7 @@ Serviço em `backend/` (Express) que a CLI consome para autenticar o usuário vi
 | `GET` | `/auth/github/callback` | Troca o código OAuth pelo access token e marca a sessão como `READY`. |
 | `GET` | `/session/:sessionId` | Status da sessão (`PENDING` / `READY` / `ERROR`) — usado no polling da CLI. |
 | `POST` | `/runner/token` | Body `{ sessionId, repo }` → `{ token }` (registration-token do runner). |
+| `POST` | `/runner/remove-token` | Body `{ sessionId, repo }` → `{ token }` (remove-token, usado pelo `uninstall`). |
 | `GET` | `/health` | Healthcheck. |
 
 ### Configuração
@@ -170,3 +171,20 @@ npm start
 ```
 
 > A sessão expira em 10 min; o token OAuth do usuário fica apenas em memória e não é persistido.
+
+---
+
+## Desenvolvimento
+
+Na raiz (CLI):
+
+```bash
+npm install
+npm test          # testes (node:test)
+npm run lint      # ESLint
+npm run format    # Prettier (escreve)
+```
+
+O CI (`.github/workflows/ci.yml`) roda lint, format:check e testes a cada `push`/PR.
+
+O roadmap com o que já foi feito e o que falta está em [`ROADMAP.md`](ROADMAP.md).

@@ -24,12 +24,16 @@ export function configureRunner(runnerDir, repo, token, name, workDir, asService
 
   const parts = [
     script,
-    '--url', quote(url),
-    '--token', quote(token),
+    '--url',
+    quote(url),
+    '--token',
+    quote(token),
     '--unattended',
     '--replace',
-    '--name', quote(name),
-    '--work', quote(workDir)
+    '--name',
+    quote(name),
+    '--work',
+    quote(workDir)
   ];
 
   // No Windows o próprio config instala e inicia o serviço.

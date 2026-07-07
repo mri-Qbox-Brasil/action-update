@@ -53,7 +53,10 @@ export async function extractRunner(filePath, osInfo, targetDir) {
 }
 
 function extractZip(filePath, targetDir) {
-  execSync(`powershell -Command "Expand-Archive -LiteralPath '${filePath}' -DestinationPath '${targetDir}' -Force"`, { stdio: 'inherit' });
+  execSync(
+    `powershell -Command "Expand-Archive -LiteralPath '${filePath}' -DestinationPath '${targetDir}' -Force"`,
+    { stdio: 'inherit' }
+  );
 }
 
 function extractTarGz(filePath, targetDir) {

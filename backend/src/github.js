@@ -25,18 +25,15 @@ export async function exchangeCodeForToken(code) {
 
 async function createRunnerToken(userToken, repo, kind) {
   // kind: 'registration-token' (registrar) ou 'remove-token' (remover).
-  const response = await fetch(
-    `https://api.github.com/repos/${repo}/actions/runners/${kind}`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${userToken}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'meu-runner-backend',
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
+  const response = await fetch(`https://api.github.com/repos/${repo}/actions/runners/${kind}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'meu-runner-backend',
+      'X-GitHub-Api-Version': '2022-11-28'
     }
-  );
+  });
 
   if (!response.ok) {
     const body = await response.text();

@@ -68,13 +68,15 @@ YAML validado (parse OK). O comportamento em runtime depende do runner self-host
 - [x] Checagem de erro explícita (`$LASTEXITCODE`) em cada passo do git.
 - [ ] **Adiado:** suporte a runner **Linux/macOS**. O runner-alvo é Windows; um variante bash não testado traria risco sem benefício imediato. Manter Windows-only por ora.
 
-## Fase 4 — Qualidade e entrega 🟢
+## Fase 4 — Qualidade e entrega ✅ (concluída)
 
-- [ ] Versionar `package.json`, `src/` e `.gitignore` (fazer o primeiro commit da CLI).
-- [ ] Testes (pelo menos `os.js`, `apiClient.js`, validação de `repo`).
-- [ ] Lint/format (ESLint + Prettier).
-- [ ] CI para a CLI (lint + testes em `push`/PR).
-- [ ] `.env.example` e seção de contribuição no README.
+Lint, format:check e testes rodando localmente (6/6) e no CI.
+
+- [x] `package.json`, `src/`, backend e `.gitignore` versionados.
+- [x] Testes com `node:test` (`os.js`, `apiClient.js`, `validateRepo`) — `npm test`.
+- [x] ESLint (flat config) + Prettier — `npm run lint` / `npm run format`.
+- [x] CI (`.github/workflows/ci.yml`): `npm install` → lint → format:check → test em `push`/PR.
+- [x] `.env.example` (raiz e backend) e `.gitattributes` para normalizar fim de linha.
 
 ---
 
@@ -91,6 +93,11 @@ YAML validado (parse OK). O comportamento em runtime depende do runner self-host
 
 ---
 
-## Ordem sugerida
+## Status
 
-**Fase 0** (destrava a CLI) → **Fase 1** (backend, sem ele a CLI não fecha o fluxo) → **Fase 4 (commit inicial)** para versionar → depois **Fases 2 e 3** em paralelo conforme prioridade.
+Todas as fases (0–4) foram implementadas e commitadas. Pendências residuais conhecidas:
+
+- Fluxo real da CLI (`config.cmd`/`svc`) não testado end-to-end — precisa de um runner e token reais.
+- OAuth completo do backend exige um GitHub OAuth App configurado.
+- `--token` do runner ainda passa por argumento (limitação da interface do `config.cmd`).
+- Suporte a runner Linux/macOS no workflow adiado (alvo é Windows).

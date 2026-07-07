@@ -1,16 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
-import {
-  createSession,
-  getSession,
-  setSessionReady,
-  setSessionError
-} from './sessions.js';
-import {
-  exchangeCodeForToken,
-  createRegistrationToken,
-  createRemovalToken
-} from './github.js';
+import { createSession, getSession, setSessionReady, setSessionError } from './sessions.js';
+import { exchangeCodeForToken, createRegistrationToken, createRemovalToken } from './github.js';
 
 const app = express();
 app.use(express.json());
